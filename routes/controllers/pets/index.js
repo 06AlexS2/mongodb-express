@@ -75,7 +75,19 @@ router.put(`${entityRoute}:_id`, async (req, res) => {
 });
 
 //eliminar mascotas
-const eraseHandler = erase(entity);
-router.delete(`${entityRoute}:_id`, eraseHandler);
+router.delete(`${entityRoute}:_id`, async (req, res) => {
+  try {
+    const { _id = null } = req.params;
+    if (!_id) {
+      return res.status(400).json({ mensaje: "missing id" });
+    }
+    //$set es un operador de mongoose que indica setear algo
+    const erasedPet = await Pet.findByIdAndDelete({ _id });
+    return res.status(204).json({ mensaje: "pet erased" });
+  } catch (error) {
+    console.log({ error });
+    return res.status(500).json({ mensaje: error.message });
+  }
+});
 
 module.exports = router;
