@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const Owner = require("./schema");
 
-const { /*create, list, */ getOne, update, erase } = require("../generics");
+const { /*create, list, */ getOne, update, erase, filterEntities } = require("../generics");
 
 const entityRoute = "/";
 const entity = "owners";
@@ -15,10 +15,11 @@ const entity = "owners";
 //listar dueños
 router.get(entityRoute, async (req, res) => {
   try {
-    const owners = await Owner.find();
+    const filter = filterEntities(Owner, req.query);
+    const owners = await Owner.find(filter);
     return res.status(200).json(owners);
   } catch (error) {
-    console.log(error);
+    console.log({ error });
     return res.status(500).json({ mensaje: error.message });
   }
 });

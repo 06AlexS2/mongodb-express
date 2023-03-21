@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const Pet = require("./schema");
 
-const { /*create, list, */ getOne, update, erase } = require("../generics");
+const { /*create, list, */ getOne, update, erase, filterEntities } = require("../generics");
 
 const entityRoute = "/";
 const entity = "pets";
@@ -15,7 +15,8 @@ const entity = "pets";
 //listar mascotas
 router.get(entityRoute, async (req, res) => {
   try {
-    const pets = await Pet.find();
+    const filter = filterEntities(Pet, req.query);
+    const pets = await Pet.find(filter).populate("owner");
     return res.status(200).json(pets);
   } catch (error) {
     console.log(error);

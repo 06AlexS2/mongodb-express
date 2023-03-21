@@ -4,23 +4,26 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 //declarar un nuevo objeto de la clase schema
-const vetSchema = new Schema({
-  vetName: {
-    type: String,
-    required: true,
+const vetSchema = new Schema(
+  {
+    vetName: {
+      type: String,
+      required: true,
+    },
+    vetLName: {
+      type: String,
+      required: true,
+    },
+    vetLicense: {
+      type: String,
+      required: true,
+    },
+    vetCountry: {
+      type: String,
+      required: true,
+    },
   },
-  vetLName: {
-    type: String,
-    required: true,
-  },
-  vetLicense: {
-    type: String,
-    required: true,
-  },
-  vetCountry: {
-    type: String,
-    required: true,
-  },
-});
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("vets", vetSchema);
