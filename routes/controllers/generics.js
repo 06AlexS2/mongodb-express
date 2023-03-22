@@ -1,4 +1,4 @@
-const { list, getOne, create, update, erase } = require("../../data-handler");
+const { erase } = require("../../data-handler");
 const { v4: uuidv4 } = require("uuid");
 const lodash = require("lodash");
 
@@ -6,77 +6,99 @@ const lodash = require("lodash");
 /* closureList es una funcion que obtiene la entidad
 y con ella, encapsula o encierra la subfuncion closureHandlerList, que es la que se encarga
 asíncronamente de enlistar la entidad en cuestion */
-const listEntities = function closureList(entity) {
+//el metodo actualizado generico para listar utiliza el modelo, que por defecto es null y el metodo populate, que
+//por defecto devuelve un array vacio
+const listEntities = function closureList({ Model = null, populate = [] }) {
   return async function closureHandlerList(req, res) {
-    if (!entity) {
-      res.status(404).json({ mensaje: "not found" });
+    try {
+      if (!Model) {
+        throw new Error("Model not sent");
+      }
+      const filter = filterEntities(Model, req.query);
+      let listPromise = Model.find(filter);
+      //dado que no usamos typescript podemos modificar la estructura del parametro populate
+      if (Array.isArray(populate) && populate.length > 0) {
+        for (const nestedEntity of populate) {
+          listPromise = listPromise.populate(nestedEntity);
+        }
+      }
+
+      const result = await listPromise;
+      return res.status(200).json(result);
+    } catch (error) {
+      console.log({ error });
+      return res.status(500).json({ mensaje: error.message });
     }
-    const _entity = await list({ entityDir: entity });
-    return res.status(200).json(_entity);
   };
 };
 
-const getOneEntity = function closureSingleEntityList(entity) {
+const getOneEntity = function closureSingleEntityList({ Model = null }) {
   return async function closureHandlerSingleEntityList(req, res) {
-    const { _id = null } = req.params;
-    if (!_id) {
-      return res.status(400).json({ mensaje: "missing id" });
+    try {
+      if (!Model) {
+        throw new Error("Model not sent");
+      }
+      const { _id } = req.params;
+      const entity = await Model.findById(_id);
+      if (entity) {
+        return res.status(200).json(entity);
+      }
+      return res.status(404).json({ mensaje: "resource not found" });
+    } catch (error) {
+      console.log(error);
+      return res.status(500).json({ mensaje: error.message });
     }
-    if (!entity) {
-      res.status(404).json({ mensaje: "not found" });
-    }
-    const _entity = await getOne({ entityDir: entity, fileName: _id });
-    if (_entity) {
-      return res.status(200).json(_entity);
-    }
-    res.status(404).json({ mensaje: "no encontrado" });
   };
 };
 
-const createEntity = function closureCreateEntity(entity) {
+const createEntity = function closureCreateEntity({ Model = null }) {
   return async function closureHandlerCreateEntity(req, res) {
-    if (!entity) {
-      res.status(404).json({ mensaje: "not found" });
+    try {
+      if (!Model) {
+        throw new Error("Model not sent");
+      }
+      if (!req.body) {
+        return res.status(400).json({ mensaje: "missing body" });
+      }
+      if (!Object.keys(req.body).length) {
+        return res.status(400).json({ mensaje: "missing body" });
+      }
+      const { _id, ...remainingEntityData } = req.body;
+      const entity = new Model(remainingEntityData);
+      await entity.save();
+      return res.status(200).json(entity);
+    } catch (error) {
+      console.log({ error });
+      return res.status(500).json({ mensaje: error.message });
     }
-    //si hay datos en el body y si el body no está vacio en algun campo
-    if (req.body && Object.keys(req.body).length > 0) {
-      //crear un identificador unico para cada json de mascota
-      const _id = uuidv4();
-      //con el fin de que el id se integre al cuerpo del json, copiamos el req.body a un nuevo objeto, y le agregamos el _id
-      const newEntity = { ...req.body, _id };
-      //petCreated es lo que se envia
-      const entityCreated = await create({
-        entityDir: entity,
-        fileName: _id,
-        dataSave: newEntity,
-      });
-      res.status(200).json(entityCreated);
-    }
-    return res.status(400).json({ mensaje: "missing body" });
   };
 };
 
-const editEntity = function closureEditEntity(entity) {
+const editEntity = function closureEditEntity({ Model = null }) {
   return async function closureHandlerEditEntity(req, res) {
-    //verificar que exista el _id, con el fin de verificar si existen mascotas
-    const { _id = null } = req.params;
-    if (!_id) {
-      return res.status(400).json({ mensaje: "missing id" });
-    }
-    if (!entity) {
-      res.status(404).json({ mensaje: "not found" });
-    }
-    //si hay datos en el body y si el body no está vacio en algun campo
-    if (req.body && Object.keys(req.body).length > 0) {
-      const currentData = { ...req.body, _id };
-      const updatedEntity = await update({
-        entityDir: entity,
-        fileName: _id,
-        currentData,
-      });
+    try {
+      if (!Model) {
+        throw new Error("Model not sent");
+      }
+      const { _id = null } = req.params;
+      const { _id: id, ...newData } = req.body;
+      if (!_id) {
+        return res.status(400).json({ mensaje: "missing id" });
+      }
+      //$set es un operador de mongoose que indica setear algo
+      const updatedEntity = await Model.findOneAndUpdate(
+        { _id },
+        { $set: newData },
+        { new: true, runValidators: true }
+      );
+      if (!updatedEntity) {
+        return res.status(404).json({ mensaje: "not found" });
+      }
       return res.status(200).json(updatedEntity);
+    } catch (error) {
+      console.log({ error });
+      return res.status(500).json({ mensaje: error.message });
     }
-    return res.status(400).json({ mensaje: "missing body" });
   };
 };
 
