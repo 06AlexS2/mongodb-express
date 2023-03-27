@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const Pet = require("./schema");
+const Owner = require("../owners/schema");
 
 const {
   create,
@@ -29,7 +30,18 @@ router.get(`${entityRoute}:_id`, getOneHandler);
 
 //crear mascotas
 const createHandler = create({ Model: Pet });
-router.post(entityRoute, createHandler);
+router.post(entityRoute, async (req, res) => {
+  const { owner = null } = req.body;
+  const ownerExists = await Owner.exists({ _id: owner });
+  if (ownerExists) {
+    return createHandler(req, res);
+  }
+  return res
+    .status(400)
+    .json({
+      mensaje: `Owner with _id ${owner} does not exist!`,
+    });
+});
 
 //editar mascotas
 const updateHandler = update({ Model: Pet });
