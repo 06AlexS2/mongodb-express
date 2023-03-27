@@ -1,5 +1,8 @@
 const router = require("express").Router();
 const Consult = require("./schema");
+const Vet = require("../vets/schema");
+const Pet = require("../pets/schema");
+const createError = require("http-errors");
 
 const {
   create, list, getOne,
@@ -26,7 +29,24 @@ router.get(`${entityRoute}:_id`, getOneHandler);
 
 //crear consultas
 const createHandler = create({Model: Consult});
-router.post(entityRoute, createHandler);
+router.post(entityRoute, async (req, res) => {
+  const {pet = null, vet = null} = req.body;
+  const vetExists = await Vet.exists({_id: vet});
+  const petExists = await Pet.exists({_id: pet});
+  if(vetExists && petExists) {
+    //este ya tiene el response ahi, con este objeto que le pasamos se encarga de devolver la respuesta
+    return createHandler(req, res);
+  }
+  if(!vetExists) {
+    return res.status(400).json({mensaje : `Vet with _id ${JSON.stringify(vet)} does not exist!`});
+  }
+  if(!petExists) {
+    return res.status(400).json({mensaje : `Pet with _id ${JSON.stringify(pet)} does not exist!`});
+  }
+  if(!petExists && !vetExists) {
+    return res.status(400).json({mensaje : "neither the pet or the vet are existing entities, please check."})
+  }
+});
 
 //editar consultas
 const updateHandler = update({Model: Consult});
