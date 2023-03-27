@@ -28,19 +28,7 @@ const updateHandler = update({Model: Owner});
 router.put(`${entityRoute}:_id`, updateHandler);
 
 //eliminar dueños
-router.delete(`${entityRoute}:_id`, async (req, res) => {
-  try {
-    const { _id = null } = req.params;
-    if (!_id) {
-      return res.status(400).json({ mensaje: "missing id" });
-    }
-    //$set es un operador de mongoose que indica setear algo
-    const erasedOwner = await Owner.findByIdAndDelete({ _id });
-    return res.status(204).json({ mensaje: "owner erased" });
-  } catch (error) {
-    console.log({ error });
-    return res.status(500).json({ mensaje: error.message });
-  }
-});
+const deleteHandler = erase({ Model: Owner });
+router.delete(`${entityRoute}:_id`, deleteHandler);
 
 module.exports = router;

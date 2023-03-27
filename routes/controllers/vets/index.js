@@ -1,7 +1,14 @@
 const router = require("express").Router();
 const Vet = require("./schema");
 
-const { create, list, getOne, update, erase, filterEntities } = require("../generics");
+const {
+  create,
+  list,
+  getOne,
+  update,
+  erase,
+  documentExists,
+} = require("../generics");
 
 const entityRoute = "/";
 
@@ -12,35 +19,36 @@ const entityRoute = "/";
 //y ya cuando queramos crear el enrutador de metodo listar, solo llamamos a la variable anterior y le damos la ruta de entidad
 //correspondiente, en este caso, veterinarios (vets)
 //listar veterinarios
-const listHandler = list({Model: Vet});
+const listHandler = list({ Model: Vet });
 router.get(entityRoute, listHandler);
 
 //obtener un solo veterinario sigue el mismo metodo que en listar todos los dueños (anterior)
-const getOneHandler = getOne({Model: Vet});
+const getOneHandler = getOne({ Model: Vet });
 router.get(`${entityRoute}:_id`, getOneHandler);
 
 //crear veterinarios
-const createHandler = create({Model: Vet});
-router.post(entityRoute, createHandler);
+const createHandler = create({ Model: Vet });
+//vamos a crear un handler para verificar que no hayan 2 vets con el mismo numero de licencia
+/*cuando hacemos un router como el de abajo, express.js automaticamente nos permite definir funciones intermedias,
+mejor conocidas como middleware, que pueden ser ejecutadas después de una acción en especifico.
+i.e. router.get(entity, middleware1, middleware2, handler)
+*/
+const middlewareDocumentExists = documentExists({
+  Model: Vet,
+  fields: ["vetLicense"],
+});
+router.post(entityRoute, middlewareDocumentExists, createHandler);
 
 //editar veterinarios
-const updateHandler = update({Model: Vet});
-router.put(`${entityRoute}:_id`, updateHandler);
+const updateHandler = update({ Model: Vet });
+const middlewareEntityID = documentExists({
+  Model: Vet,
+  fields: ["vetLicense", { operator: "$ne", entName: "_id" }],
+});
+router.put(`${entityRoute}:_id`, middlewareEntityID, updateHandler);
 
 //eliminar veterinarios
-router.delete(`${entityRoute}:_id`, async (req, res) => {
-  try {
-    const { _id = null } = req.params;
-    if (!_id) {
-      return res.status(400).json({ mensaje: "missing id" });
-    }
-    //$set es un operador de mongoose que indica setear algo
-    const erasedVet = await Vet.findByIdAndDelete({ _id });
-    return res.status(204).json({ mensaje: "vet erased" });
-  } catch (error) {
-    console.log({ error });
-    return res.status(500).json({ mensaje: error.message });
-  }
-});
+const deleteHandler = erase({ Model: Vet });
+router.delete(`${entityRoute}:_id`, deleteHandler);
 
 module.exports = router;

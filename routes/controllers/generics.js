@@ -1,5 +1,4 @@
-const { erase } = require("../../data-handler");
-const { v4: uuidv4 } = require("uuid");
+const createError = require("http-errors");
 const lodash = require("lodash");
 
 //mediante un closure de una funcion, podemos recortar la redaccion de features
@@ -97,23 +96,33 @@ const editEntity = function closureEditEntity({ Model = null }) {
       return res.status(200).json(updatedEntity);
     } catch (error) {
       console.log({ error });
+      if (error.name === "MongoError" && error.code === 11000) {
+        return res.status(400).json({
+          mensaje: `entity with vetLicense ${req.body.vetLicense} already exists!`,
+        });
+      }
       return res.status(500).json({ mensaje: error.message });
     }
   };
 };
 
-const deleteEntity = function closureDeleteEntity(entity) {
+const deleteEntity = function closureDeleteEntity({ Model = null }) {
   return async function closureHandlerDeleteEntity(req, res) {
-    //verificar que exista el _id, con el fin de verificar si existen mascotas
-    const { _id = null } = req.params;
-    if (!_id) {
-      return res.status(400).json({ mensaje: "missing id" });
+    try {
+      if (!Model) {
+        throw new Error("Model not sent");
+      }
+      const { _id = null } = req.params;
+      if (!_id) {
+        return res.status(400).json({ mensaje: "missing id" });
+      }
+      //$set es un operador de mongoose que indica setear algo
+      const erasedEntity = await Model.findByIdAndDelete({ _id });
+      return res.status(204).json({ mensaje: "erased entity" });
+    } catch (error) {
+      console.log({ error });
+      return res.status(500).json({ mensaje: error.message });
     }
-    if (!entity) {
-      res.status(404).json({ mensaje: "not found" });
-    }
-    await erase({ entityDir: entity, fileName: _id });
-    return res.status(204).send();
   };
 };
 
@@ -143,6 +152,74 @@ const filterEntities = (Model, query) => {
   return queryResult;
 };
 
+//esta funcion es para determinar si existen dos o mas entidades con un mismo valor (en el ejemplo, esto es
+// el campo documento, sin embargo, en el video lo aplican para dueños, tu solo lo vas a aplicar para vets)
+//las funciones podrian dejarse anonimas, pero es mejor nombrarlas, porque si hay errores sabrás de donde vienen
+const documentExists = function closureDocumentExists({
+  Model = null,
+  fields = [],
+}) {
+  //aqui se agrega un callback llamado next
+  return async function closureHandlerDocumentExists(req, _res, next) {
+    try {
+      if (!Model) {
+        throw new Error("Model not sent");
+      }
+      //validemos si dentro de req.body existe un campo a llenar y no esta vacio
+      if (req.body && Array.isArray(fields) && fields.length) {
+        const queryExists = fields.reduce((accumulator, currentProp) => {
+          if (typeof currentProp === "string") {
+            if (currentProp === "_id") {
+              accumulator = {
+                ...accumulator,
+                [currentProp]: req.params[currentProp],
+              };
+            } else {
+              accumulator = {
+                ...accumulator,
+                [currentProp]: req.body[currentProp],
+              };
+            }
+          }
+          if (typeof currentProp === "object" && !Array.isArray(currentProp)) {
+            const { operator = null, entName = null } = currentProp;
+            if (operator && entName) {
+              if (entName === "_id") {
+                accumulator = {
+                  ...accumulator,
+                  [entName]: { [operator]: req.params[entName] },
+                };
+              } else {
+                accumulator = {
+                  ...accumulator,
+                  [entName]: { [operator]: req.body[entName] },
+                };
+              }
+            }
+          }
+          return accumulator;
+        }, {});
+
+        console.log({ queryExists });
+
+        const sameLicenseEntityExists = await Model.exists(queryExists);
+        if (sameLicenseEntityExists) {
+          const err = new createError[409](
+            `entity ${JSON.stringify(
+              req.body
+            )} has fields that forbid duplicate`
+          );
+          return next(err);
+        }
+      }
+      return next();
+    } catch (error) {
+      const err = new createError[500]();
+      return next(err);
+    }
+  };
+};
+
 //se exporta listEntities como listar cuando se use fuera en otros controllers
 module.exports = {
   list: listEntities,
@@ -151,4 +228,5 @@ module.exports = {
   update: editEntity,
   erase: deleteEntity,
   filterEntities,
+  documentExists,
 };
